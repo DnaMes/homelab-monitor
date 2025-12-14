@@ -1,0 +1,25 @@
+# Docker runtime
+*.log
+*.pid
+*.sock
+
+# Service data (sensitive/large)
+uptime-kuma/data/
+ntfy/data/
+tailscale/data/
+
+# Backups
+*.tar.gz
+*.zip
+backup*/
+
+# Secrets
+.env
+*.key
+*.pem
+*.crt
+
+# Temporary files
+*~
+*.swp
+.DS_Store

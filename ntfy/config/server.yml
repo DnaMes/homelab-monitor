@@ -1,0 +1,31 @@
+# ntfy Server Configuration
+# https://docs.ntfy.sh/config/
+
+# Base URL (public IP)
+base-url: "http://72.62.48.62:8080"
+
+# Listen address (inside container)
+listen-http: ":80"
+
+# Cache file
+cache-file: "/var/lib/ntfy/cache.db"
+
+# Default permissions (open for now, can restrict later)
+auth-default-access: "read-write"
+
+# Behind proxy (false for direct access)
+behind-proxy: false
+
+# Attachment settings
+attachment-cache-dir: "/var/lib/ntfy/attachments"
+attachment-total-size-limit: "100M"
+attachment-file-size-limit: "10M"
+
+# Visitor settings (rate limiting)
+visitor-subscription-limit: 100
+visitor-request-limit-burst: 60
+visitor-request-limit-replenish: "10s"
+
+# Enable web UI
+enable-login: false
+enable-signup: false
