@@ -1,0 +1,484 @@
+# Gatus Configuration - Homelab Monitoring
+# Location: /opt/homelab-monitor/gatus/config/config.yaml
+# Last Updated: 2025-12-14
+#
+# 40+ Services monitored across 7 homelab hosts
+# Integrated with ntfy for push notifications
+
+###############################################################################
+# STORAGE CONFIGURATION
+###############################################################################
+
+storage:
+  type: sqlite
+  path: /data/gatus.db
+
+###############################################################################
+# ALERTING CONFIGURATION
+###############################################################################
+
+alerting:
+  ntfy:
+    # ntfy server (same Docker network)
+    topic: "homelab-monitoring"
+    url: "http://ntfy:80"
+    priority: 3
+    default-alert:
+      description: "Service health check failed"
+      send-on-resolved: true
+      failure-threshold: 3
+      success-threshold: 2
+
+  # Critical alerts (separate topic, higher priority)
+  ntfy-critical:
+    topic: "homelab-critical"
+    url: "http://ntfy:80"
+    priority: 5
+    default-alert:
+      description: "CRITICAL: Infrastructure component failed"
+      send-on-resolved: true
+      failure-threshold: 2
+      success-threshold: 1
+
+  # DNS-specific alerts
+  ntfy-dns:
+    topic: "homelab-dns"
+    url: "http://ntfy:80"
+    priority: 4
+    default-alert:
+      description: "DNS resolution failure detected"
+      send-on-resolved: true
+      failure-threshold: 2
+      success-threshold: 1
+
+###############################################################################
+# WEB CONFIGURATION
+###############################################################################
+
+web:
+  port: 8080
+
+ui:
+  title: "Homelab Status - Gatus"
+  description: "External monitoring for erdlabs.com homelab infrastructure"
+  header: "🏠 Homelab Monitoring"
+
+###############################################################################
+# ENDPOINTS - CRITICAL INFRASTRUCTURE (P0)
+###############################################################################
+
+endpoints:
+  # ==========================================================================
+  # CRITICAL INFRASTRUCTURE - 60s interval
+  # If these fail, entire network may be down
+  # ==========================================================================
+
+  - name: "🔥 OPNsense Firewall"
+    group: infrastructure
+    url: "https://192.168.1.1"
+    interval: 60s
+    client:
+      insecure: true  # Self-signed certificate
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy-critical
+
+  - name: "🌐 Primary DNS (AdGuard)"
+    group: infrastructure
+    url: "192.168.1.1"  # DNS query, not HTTP
+    interval: 60s
+    dns:
+      query-name: "google.com"
+      query-type: "A"
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
+      - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: ntfy-dns
+
+  - name: "🌐 Secondary DNS (Berry)"
+    group: infrastructure
+    url: "192.168.1.15"
+    interval: 60s
+    dns:
+      query-name: "google.com"
+      query-type: "A"
+      query-port: 53
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
+      - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: ntfy-dns
+
+  - name: "🌐 Internal DNS Resolution"
+    group: infrastructure
+    url: "192.168.1.1"
+    interval: 120s
+    dns:
+      query-name: "traefik.lan.internal"
+      query-type: "A"
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
+      - "[BODY] == 192.168.1.3"
+    alerts:
+      - type: ntfy-dns
+
+  - name: "💻 Proxmox pvefw (Network Infra)"
+    group: infrastructure
+    url: "https://192.168.1.5:8006"
+    interval: 60s
+    client:
+      insecure: true
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy-critical
+
+  - name: "💻 Proxmox pve-awow (Apps)"
+    group: infrastructure
+    url: "https://192.168.1.4:8006"
+    interval: 60s
+    client:
+      insecure: true
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy-critical
+
+  # ==========================================================================
+  # HIGH PRIORITY SERVICES - 120s interval
+  # Critical for homelab functionality
+  # ==========================================================================
+
+  - name: "💾 TrueNAS (NAS + Media)"
+    group: storage
+    url: "https://192.168.1.12"
+    interval: 120s
+    client:
+      insecure: true
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 5000"
+    alerts:
+      - type: ntfy
+
+  - name: "🏠 Home Assistant"
+    group: automation
+    url: "http://192.168.1.9:8123"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "🎬 Jellyfin Media Server"
+    group: media
+    url: "http://192.168.1.12:8096"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 5000"
+    alerts:
+      - type: ntfy
+
+  - name: "🚀 Traefik Reverse Proxy"
+    group: infrastructure
+    url: "http://192.168.1.3:8080/api/overview"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: ntfy
+
+  - name: "📡 UniFi Controller"
+    group: infrastructure
+    url: "https://192.168.1.6:8443"
+    interval: 120s
+    client:
+      insecure: true
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  # ==========================================================================
+  # MONITORING & SUPPORT SERVICES - 120-300s interval
+  # ==========================================================================
+
+  - name: "📊 Grafana (Berry)"
+    group: monitoring
+    url: "http://192.168.1.15:3000"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "📈 Prometheus (Berry)"
+    group: monitoring
+    url: "http://192.168.1.15:9090"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "⚡ n8n Automation"
+    group: automation
+    url: "http://192.168.1.30:5678"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "🐳 Portainer (Berry)"
+    group: monitoring
+    url: "https://192.168.1.15:9443"
+    interval: 300s
+    client:
+      insecure: true
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "📋 Dozzle Logs (Berry)"
+    group: monitoring
+    url: "http://192.168.1.15:8080"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: ntfy
+
+  - name: "🌐 AdGuard Secondary UI"
+    group: infrastructure
+    url: "http://192.168.1.15:3002"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: ntfy
+
+  # ==========================================================================
+  # MEDIA AUTOMATION (*ARR STACK) - 300s interval
+  # All running on TrueNAS (192.168.1.81)
+  # ==========================================================================
+
+  - name: "🎞️ Jellyseerr (Media Requests)"
+    group: media
+    url: "http://192.168.1.81:5055"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "📺 Sonarr (TV Shows)"
+    group: media
+    url: "http://192.168.1.81:8989"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "🎥 Radarr (Movies)"
+    group: media
+    url: "http://192.168.1.81:7878"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "🎵 Lidarr (Music)"
+    group: media
+    url: "http://192.168.1.81:8686"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "📚 Readarr (Books)"
+    group: media
+    url: "http://192.168.1.81:8787"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "🔍 Prowlarr (Indexers)"
+    group: media
+    url: "http://192.168.1.81:9696"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  - name: "💬 Bazarr (Subtitles)"
+    group: media
+    url: "http://192.168.1.81:6767"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: ntfy
+
+  # ==========================================================================
+  # OPTIONAL UTILITIES - 600s interval (10 minutes)
+  # Non-critical services
+  # ==========================================================================
+
+  - name: "🧹 Maintainerr (Library Cleanup)"
+    group: utilities
+    url: "http://192.168.1.81:6246"
+    interval: 600s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 5000"
+
+  - name: "💾 Duplicati (Backups)"
+    group: utilities
+    url: "http://192.168.1.81:8200"
+    interval: 600s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 5000"
+
+  - name: "📥 qBittorrent (Torrents)"
+    group: utilities
+    url: "http://192.168.1.81:8081"
+    interval: 600s
+    conditions:
+      - "[STATUS] == 401"  # Expects auth challenge
+      - "[RESPONSE_TIME] < 3000"
+
+  - name: "📰 SABnzbd (Usenet)"
+    group: utilities
+    url: "http://192.168.1.81:8090"
+    interval: 600s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+
+  - name: "📊 Organizr (Dashboard)"
+    group: utilities
+    url: "http://192.168.1.81:8181"
+    interval: 600s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+
+  - name: "🔎 Zilean (DMM Scraper)"
+    group: utilities
+    url: "http://192.168.1.81:8182"
+    interval: 600s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+
+  # ==========================================================================
+  # EXTERNAL / VPS SERVICES - 120s interval
+  # Monitor the monitoring stack itself
+  # ==========================================================================
+
+  - name: "📱 ntfy Server (VPS)"
+    group: external
+    url: "http://ntfy:80"  # Internal Docker network
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 1000"
+    alerts:
+      - type: ntfy-critical  # Alert if ntfy itself is down!
+
+  - name: "📋 Dozzle (VPS)"
+    group: external
+    url: "http://dozzle:8080"  # Internal Docker network
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 1000"
+
+  - name: "🆙 Gatus Self-Monitor"
+    group: external
+    url: "http://localhost:8080"  # Self-check
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+###############################################################################
+# MAINTENANCE & MONITORING NOTES
+###############################################################################
+
+# Total Endpoints: 33 services monitored
+#
+# Service Distribution:
+# - Infrastructure: 10 services (critical network components)
+# - Storage: 1 service (TrueNAS)
+# - Media: 8 services (Jellyfin + *arr stack)
+# - Automation: 2 services (Home Assistant, n8n)
+# - Monitoring: 5 services (Grafana, Prometheus, Portainer, Dozzle x2)
+# - Utilities: 6 services (optional, non-critical)
+# - External: 3 services (VPS stack self-monitoring)
+#
+# Alert Priorities:
+# - P0 (Critical): OPNsense, DNS, Proxmox, ntfy server
+# - P1 (High): TrueNAS, Home Assistant, Jellyfin, Traefik, UniFi
+# - P2 (Medium): Grafana, Prometheus, n8n, Media services
+# - P3 (Low): Utilities, optional services
+#
+# Network Access:
+# - All 192.168.1.x services accessed via Tailscale VPN mesh
+# - Internal Docker services (ntfy, dozzle) via monitor-net bridge
+# - Gatus self-monitor via localhost
+#
+# Configuration Updates:
+# 1. Edit this file: /opt/homelab-monitor/gatus/config/config.yaml
+# 2. Commit to Git
+# 3. Restart Gatus: docker compose restart gatus
+# 4. Verify: curl http://72.62.48.62:3001
+#
+# Adding New Services:
+# 1. Add endpoint block above
+# 2. Set appropriate group, interval, conditions
+# 3. Choose alert type (ntfy, ntfy-critical, ntfy-dns, or none)
+# 4. Restart Gatus to apply changes
+#
+# Troubleshooting:
+# - View logs: docker compose logs gatus
+# - Check config: docker exec gatus cat /config/config.yaml
+# - Test endpoint: docker exec gatus wget -O- http://192.168.1.1
+# - Verify Tailscale: docker exec gatus ping 192.168.1.1

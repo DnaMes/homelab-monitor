@@ -1,15 +1,14 @@
 version: '3.8'
 
 services:
-  gatus:
-    image: twinproduction/gatus:latest
-    container_name: gatus
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
     restart: unless-stopped
     ports:
-      - "3001:8080"  # Same port as Uptime Kuma for easy transition
+      - "3001:3001"
     volumes:
-      - ./gatus/config:/config:ro
-      - ./gatus/data:/data
+      - ./uptime-kuma/data:/app/data
     environment:
       - TZ=Europe/Berlin
     networks:
@@ -50,5 +49,5 @@ networks:
     driver: bridge
 
 volumes:
-  gatus-data:
+  uptime-kuma-data:
   ntfy-data:
