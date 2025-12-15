@@ -1,0 +1,56 @@
+# Traefik v3 Configuration - Hostinger VPS
+# Last Updated: 2025-12-15
+# Purpose: HTTPS reverse proxy for monitoring services (Gatus, ntfy, Dozzle)
+
+# API and dashboard
+api:
+  dashboard: true
+  insecure: false  # Dashboard accessible only via HTTPS with proper routing
+
+# Entry points
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: cloudflare
+  traefik:
+    address: ":8080"
+
+# Certificate resolvers
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: admin@erdlabs.com
+      storage: /etc/traefik/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+
+# Providers
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: homelab-monitor_monitor-net
+  file:
+    directory: "/etc/traefik/conf.d"
+    watch: true
+
+# Logging
+log:
+  level: INFO
+  filePath: /var/log/traefik/traefik.log
+
+accessLog:
+  filePath: /var/log/traefik/access.log

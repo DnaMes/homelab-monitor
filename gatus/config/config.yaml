@@ -19,9 +19,9 @@ storage:
 
 alerting:
   ntfy:
-    # ntfy server (same Docker network)
+    # ntfy server via HTTPS (Traefik + Let's Encrypt)
     topic: "homelab-monitoring"
-    url: "http://ntfy:80"
+    url: "https://ntfy.vps.erdlabs.com"
     priority: 3
     default-alert:
       description: "Service health check failed"
@@ -32,7 +32,7 @@ alerting:
   # Critical alerts (separate topic, higher priority)
   ntfy-critical:
     topic: "homelab-critical"
-    url: "http://ntfy:80"
+    url: "https://ntfy.vps.erdlabs.com"
     priority: 5
     default-alert:
       description: "CRITICAL: Infrastructure component failed"
@@ -43,7 +43,7 @@ alerting:
   # DNS-specific alerts
   ntfy-dns:
     topic: "homelab-dns"
-    url: "http://ntfy:80"
+    url: "https://ntfy.vps.erdlabs.com"
     priority: 4
     default-alert:
       description: "DNS resolution failure detected"
@@ -415,29 +415,32 @@ endpoints:
 
   - name: "📱 ntfy Server (VPS)"
     group: external
-    url: "http://ntfy:80"  # Internal Docker network
+    url: "https://ntfy.vps.erdlabs.com"  # HTTPS via Traefik
     interval: 120s
     conditions:
       - "[STATUS] == 200"
-      - "[RESPONSE_TIME] < 1000"
+      - "[RESPONSE_TIME] < 2000"
+      - "[CERTIFICATE_EXPIRATION] > 720h"  # Alert 30 days before expiry
     alerts:
       - type: ntfy-critical  # Alert if ntfy itself is down!
 
   - name: "📋 Dozzle (VPS)"
     group: external
-    url: "http://dozzle:8080"  # Internal Docker network
+    url: "https://dozzle.vps.erdlabs.com"  # HTTPS via Traefik
     interval: 300s
     conditions:
       - "[STATUS] == 200"
-      - "[RESPONSE_TIME] < 1000"
+      - "[RESPONSE_TIME] < 2000"
+      - "[CERTIFICATE_EXPIRATION] > 720h"
 
   - name: "🆙 Gatus Self-Monitor"
     group: external
-    url: "http://localhost:8080"  # Self-check
+    url: "https://gatus.vps.erdlabs.com"  # HTTPS via Traefik (self-check)
     interval: 120s
     conditions:
       - "[STATUS] == 200"
-      - "[RESPONSE_TIME] < 500"
+      - "[RESPONSE_TIME] < 1000"
+      - "[CERTIFICATE_EXPIRATION] > 720h"
 
 ###############################################################################
 # MAINTENANCE & MONITORING NOTES
@@ -482,3 +485,25 @@ endpoints:
 # - Check config: docker exec gatus cat /config/config.yaml
 # - Test endpoint: docker exec gatus wget -O- http://192.168.1.1
 # - Verify Tailscale: docker exec gatus ping 192.168.1.1
+
+  - name: "🦑 Squid Proxy (OPNsense)"
+    group: infrastructure
+    url: "http://192.168.1.1:3128"
+    interval: 300s
+    client:
+      timeout: 5s
+    conditions:
+      - "[STATUS] == 400"  # Squid returns error page on direct HTTP access (which is good, means it is running)
+      - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: ntfy
+
+  - name: "🛡️ AdGuard Web UI"
+    group: infrastructure
+    url: "http://192.168.1.1:3000"
+    interval: 300s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: ntfy

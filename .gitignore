@@ -1,26 +1,12 @@
-# Docker runtime
-*.log
-*.pid
-*.sock
+# Traefik sensitive files
+traefik/.env
+traefik/acme.json
+traefik/logs/*.log
 
-# Service data (sensitive/large)
-uptime-kuma/data/
-ntfy/data/
-tailscale/data/
+# Gatus database
+gatus/data/*.db
+gatus/data/*.db-shm
+gatus/data/*.db-wal
 
-# Backups
-*.tar.gz
-*.zip
-backup*/
-
-# Secrets
-.env
-*.key
-*.pem
-*.crt
-
-# Temporary files
-*~
-*.swp
-.DS_Store
-gatus/data/*.db*
+# ntfy data
+ntfy/data/*

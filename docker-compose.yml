@@ -1,12 +1,41 @@
 version: '3.8'
 
 services:
+  # Traefik reverse proxy - HTTPS termination with Let's Encrypt
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"      # HTTP (redirects to HTTPS)
+      - "443:443"    # HTTPS
+      - "8082:8080"  # Dashboard (8082 to avoid conflict with ntfy port 8080)
+    volumes:
+      - ./traefik/config/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/logs:/var/log/traefik
+      - ./traefik/acme.json:/etc/traefik/acme.json
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - CLOUDFLARE_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - TZ=Europe/Berlin
+      - DOCKER_API_VERSION=1.44
+    networks:
+      - monitor-net
+    labels:
+      - "traefik.enable=true"
+      # Dashboard router
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.vps.erdlabs.com`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=cloudflare"
+
+  # Gatus - YAML-based monitoring dashboard
   gatus:
     image: twinproduction/gatus:latest
     container_name: gatus
     restart: unless-stopped
-    ports:
-      - "3001:8080"  # Same port as Uptime Kuma for easy transition
+    # Port mapping removed - Traefik handles routing
     volumes:
       - ./gatus/config:/config:ro
       - ./gatus/data:/data
@@ -14,13 +43,19 @@ services:
       - TZ=Europe/Berlin
     networks:
       - monitor-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gatus.rule=Host(`gatus.vps.erdlabs.com`)"
+      - "traefik.http.routers.gatus.entrypoints=websecure"
+      - "traefik.http.routers.gatus.tls.certresolver=cloudflare"
+      - "traefik.http.services.gatus.loadbalancer.server.port=8080"
 
+  # ntfy - Push notification server
   ntfy:
     image: binwiederhier/ntfy:latest
     container_name: ntfy
     restart: unless-stopped
-    ports:
-      - "8080:80"
+    # Port mapping removed - Traefik handles routing
     volumes:
       - ./ntfy/data:/var/lib/ntfy
       - ./ntfy/config:/etc/ntfy
@@ -29,13 +64,19 @@ services:
     command: serve
     networks:
       - monitor-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ntfy.rule=Host(`ntfy.vps.erdlabs.com`)"
+      - "traefik.http.routers.ntfy.entrypoints=websecure"
+      - "traefik.http.routers.ntfy.tls.certresolver=cloudflare"
+      - "traefik.http.services.ntfy.loadbalancer.server.port=80"
 
+  # Dozzle - Docker log viewer
   dozzle:
     image: amir20/dozzle:latest
     container_name: dozzle
     restart: unless-stopped
-    ports:
-      - "8888:8080"
+    # Port mapping removed - Traefik handles routing
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
@@ -44,6 +85,12 @@ services:
       - DOZZLE_TAILSIZE=300
     networks:
       - monitor-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dozzle.rule=Host(`dozzle.vps.erdlabs.com`)"
+      - "traefik.http.routers.dozzle.entrypoints=websecure"
+      - "traefik.http.routers.dozzle.tls.certresolver=cloudflare"
+      - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
 
 networks:
   monitor-net:
