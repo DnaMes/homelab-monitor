@@ -10,3 +10,5 @@ gatus/data/*.db-wal
 
 # ntfy data
 ntfy/data/*
+
+.env
